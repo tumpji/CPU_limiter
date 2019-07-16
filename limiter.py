@@ -77,8 +77,14 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.ncpus is None:
-        args.ncpus = psutil.cpu_count()
-        print('Warning: NCPUS is not provided assuming it is {}'.format(args.ncpus))
+        if 'PBS_RESC_TOTAL_PROCS' in os.environ:
+            args.ncpus = int(os.environ['PBS_RESC_TOTAL_PROCS'])
+            print('Warning: NCPUS is not provided assuming it is {}'.format(args.ncpus))
+            print('\tBased on PBS_RESC_TOTAL_PROCS variable')
+        else:
+            args.ncpus = psutil.cpu_count()
+            print('Warning: NCPUS is not provided assuming it is {}'.format(args.ncpus))
+            print('\tBased on number of CPUS in system')
 
 
     while True:
