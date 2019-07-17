@@ -23,14 +23,20 @@ import time
 import psutil
 import argparse
 
-MIN_OVERTIME_PERC = 0.97
-MAX_OVERTIME_PERC = 0.99
-CHECK_EVERY = 10 # sec
+MAX_OVERTIME_PERC = 0.98    # maximum overtime allowed
+MIN_OVERTIME_PERC = 0.96    # end limiting processes by this % overtime
+CHECK_EVERY = 10            # if not stopped it will check every [sec] if is not overtime
+
+SLEEP_TIME_THREASHOLD = 0.05    # if automatic selection of processes, this is minimum proportion of cpu time to select a process
+SLEEP_TIME = 1                  # time in sleep until it will check again [sec]
+WAKE_TIME = 0.2                 # when renew, it will be runing this [sec]
 
 
-SLEEP_TIME_THREASHOLD = 0.05 # precent of one cpu
-SLEEP_TIME = 1  # sec
-WAKE_TIME = 0.2 # sec 
+assert MAX_OVERTIME_PERC >= MIN_OVERTIME_PERC
+assert CHECK_EVERY > 0
+assert WAKE_TIME > 0
+assert SLEEP_TIME > 0
+
 
 
 class Locker:
@@ -112,8 +118,8 @@ class Locker:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ncpus', type=int, default=None)
-    parser.add_argument('--renew', action='store_true')
+    parser.add_argument('--ncpus', type=int, default=None, help='number of cores given')
+    parser.add_argument('--renew', action='store_true', help='programs may be more safe: pauses program only for limited amount of time')
     args = parser.parse_args()
 
     if args.ncpus is None:
