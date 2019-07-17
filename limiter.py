@@ -36,16 +36,19 @@ assert MAX_OVERTIME_PERC >= MIN_OVERTIME_PERC
 assert CHECK_EVERY > 0
 assert WAKE_TIME > 0
 assert SLEEP_TIME > 0
-
-
+assert SLEEP_TIME_THREASHOLD > 0.
 
 class Locker:
-    def __init__(self, allocated_cpus, verbose=False):
+    def __init__(self, allocated_cpus, pids=None, regexp=None):
         self.list_of_stopped_processes = []
         self.allocated_cpus = allocated_cpus
         self.verbose = verbose
 
-    def _threshold_process_time(self, started):
+        self.pids = pids
+        self.regexp = regexp
+
+    def _threshold_process_time(self):
+        started = psutil.users()[0].started
         passed = (time.time() - started)
         threashold = passed * SLEEP_TIME_THREASHOLD
         return threashold
@@ -59,6 +62,13 @@ class Locker:
                 proc['time'] = proc['cpu_times'].user + proc['cpu_times'].system
                 yield proc
 
+    def _process_filter(self, input):
+        threshold_process_time = self._threshold_process_time(started)
+
+        for proc in input:
+            if proc['time'] >= threshold_process_time:
+                yield proc
+
     def overtime(self, MIN=False):
         user_info = psutil.users()[0]
         maxtime = (time.time() - user_info.started) * self.allocated_cpus
@@ -67,35 +77,20 @@ class Locker:
         for proc in self._process_iter():
             sum += proc['time']
 
-        if MIN:
-            return maxtime * MIN_OVERTIME_PERC <= sum
-        else:
-            return maxtime * MAX_OVERTIME_PERC <= sum
-
-
+        if MIN: return maxtime * MIN_OVERTIME_PERC <= sum
+        else: return maxtime * MAX_OVERTIME_PERC <= sum
 
 
     def _return_responsible_processes(self):
         user_info = psutil.users()[0]
-        started = user_info.started
-        threshold_process_time = self._threshold_process_time(started)
-
         user_name = user_info.name
         mypid = os.getpid()
 
         r = []
-        for proc in psutil.process_iter(
-                attrs=['pid', 'cpu_times', 'username', 'name']):
-            proc = proc.info
-            if proc['username'] != user_name:
-                continue
+        for proc in self.process_filter(self._process_iter()):
             if proc['pid'] == mypid:
                 continue
-
-            t = proc['cpu_times']
-            t = t.system + t.user
-            if t >= threshold_process_time:
-                r.append(proc['pid'])
+            r.append(proc['pid'])
         return r
 
     def stop(self):
@@ -120,6 +115,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--ncpus', type=int, default=None, help='number of cores given')
     parser.add_argument('--renew', action='store_true', help='programs may be more safe: pauses program only for limited amount of time')
+
+    parser.add_argument('--pids', type=int, nargs='+', default=None)
+    parser.add_argument('--regexp', type=str, nargs='+', default=None)
+
     args = parser.parse_args()
 
     if args.ncpus is None:
@@ -133,7 +132,7 @@ if __name__ == '__main__':
             print('\tBased on number of CPUS in system')
 
     while True:
-        l = Locker(args.ncpus)
+        l = Locker(args.ncpus, pids=args.pids, regexp=args.regexp)
 
         if l.overtime():
             if args.renew:
