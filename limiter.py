@@ -50,15 +50,21 @@ class Locker:
             'pid', 'cpu_times', 'username', 'name']):
             proc = proc.info
             if proc['username'] == username:
+                proc['time'] = proc['cpu_times'].user + proc['cpu_times'].system
                 yield proc
 
-    def overtime(self):
+    def overtime(self, MIN=False):
         user_info = psutil.users()[0]
-        started = user_info.started
+        maxtime = (time.time() - user_info.started) * self.allocated_cpus
 
         sum = 0
         for proc in self._process_iter():
-            sum += proc['cpu_times']
+            sum += proc['time']
+
+        if MIN:
+            return maxtime * MIN_OVERTIME_PERC <= sum
+        else:
+            return maxtime * MAX_OVERTIME_PERC <= sum
 
 
 
@@ -123,21 +129,20 @@ if __name__ == '__main__':
     while True:
         l = Locker(args.ncpus)
 
-        while args.renew and l.overtime():
-            l.stop()
-            time.sleep(SLEEP_TIME) 
-            l.run()
-            time.sleep(WAKE_TIME)
-
-        if not args.renew and l.overtime():
-            l.stop()
-            time.sleep(SLEEP_TIME)
-
-            while l.overtime():
-                time.sleep(SLEEP_TIME)
+        if l.overtime():
+            if args.renew:
+                while l.overtime(MIN=True):
+                    l.stop()
+                    time.sleep(SLEEP_TIME) 
+                    l.run()
+                    time.sleep(WAKE_TIME)
             else:
+                l.stop()
+                time.sleep(SLEEP_TIME)
+
+                while l.overtime(MIN=True):
+                    time.sleep(SLEEP_TIME)
                 l.run()
-                
         time.sleep(CHECK_EVERY)
             
 
